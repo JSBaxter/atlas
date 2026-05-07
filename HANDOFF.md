@@ -6,11 +6,13 @@ You're inheriting **atlas**, a fresh agent cell at `~/Documents/repos/cells/atla
 
 ## What's already been done
 
-- Cell scaffolded from [`stem-cell`](https://github.com/JSBaxter/stem-cell) at commit `d2d0c27` via `gh:JSBaxter/stem-cell` URL form (proper reproducible spawn — `.copier-answers.yml` is canonical).
+- Cell scaffolded from [`stem-cell`](https://github.com/JSBaxter/stem-cell) (currently pinned to `fe604a7` in `.copier-answers.yml` after a copier-update brought in bot identity).
 - Pushed to GitHub: https://github.com/JSBaxter/atlas (public, `main` tracks `origin/main`).
 - Queue verified: `uv sync --directory dev-tools/queue && uv run --directory dev-tools/queue pytest` → 85/85 pass.
 - Python toolchain pre-wired by template: `.pre-commit-config.yaml`, `.yamllint.yml`, `.github/workflows/` for CI, ruff + mypy configs.
-- Commits on `main`: initial scaffold, queue lockfile pinned, this handoff + SPEC.md import.
+- **Bot identity scaffolding present**: `dev-tools/agent-bot/{mint-token.sh,as-bot.sh,README.md}` is wired to a colony-shared GitHub App (`jb-colony-bot`). Operator credentials live at `~/.config/colony-bot/`. See "Bot identity setup" below.
+- **Branch protection enabled on `main`**: requires PR + 1 approving review, no direct pushes, no force pushes. The bot opens PRs; operator approves. The bot cannot self-approve, by design.
+- Commits on `main`: initial scaffold, queue lockfile pinned, this handoff, SPEC.md import, copier-update with bot identity.
 
 ## Decisions already made
 
@@ -23,7 +25,7 @@ The full design is locked in [`SPEC.md`](./SPEC.md). In particular:
 - **Default match mode = `all`**, implicit prefix matching in both directions.
 - **Description required at first registration** of a tag.
 - **No hard delete**: tags deprecated, not removed; aliases are operator-managed.
-- **MCP tool surface (~10)** and **3-table SQLite schema** are spec'd in full.
+- **MCP tool surface (~15 tools)** and **3-table SQLite schema** are spec'd in full. The spec was updated post-spawn to add `register_cell`, `get_tag_schema`, `find_induced_by`, `set_tag_schema` tools, plus `tags.payload_schema` and `cells.induced_by` columns to support morphogen integration. Read SPEC.md for the current state.
 
 ## Decisions still yours
 
@@ -31,6 +33,28 @@ The full design is locked in [`SPEC.md`](./SPEC.md). In particular:
 2. **Implementation breakdown.** One big PR or several smaller ones (domain → infra → server → MCP tools)? I'd lean several smaller — the queue cell has clean separation between `domain/`, `infra/`, and `server.py` and that's a good pattern to mirror.
 3. **`.mcp.json` registration.** Currently only the queue is wired. Once the atlas MCP server exists and runs locally, register it alongside queue so operator can interact with atlas from inside this cell's Claude sessions for testing.
 4. **Similarity algorithm for `declare_capability`'s suggestion field.** Spec says "string distance + word overlap" but doesn't pick one. Reasonable choices: rapidfuzz token ratio, or simpler Levenshtein on normalized strings. Pick one, record rationale in the queue.
+
+## Bot identity setup
+
+This cell uses **`jb-colony-bot`**, a colony-shared GitHub App. Operator credentials live at `~/.config/colony-bot/` (`private-key.pem` + `app.env`).
+
+**Before any git operation in this session**, point the agent-bot scripts at the shared credential directory:
+
+```bash
+export AGENT_BOT_CRED_DIR=~/.config/colony-bot/
+```
+
+**For every git operation that should be attributed to the bot** (commits on branches, pushes, PR open/comment), use the wrapper:
+
+```bash
+dev-tools/agent-bot/as-bot.sh git commit -m "feat(...): ..."
+dev-tools/agent-bot/as-bot.sh git push -u origin <branch>
+dev-tools/agent-bot/as-bot.sh gh pr create --fill
+```
+
+The wrapper mints a fresh installation token, sets `GIT_AUTHOR_*` to the bot identity, and threads the token into `git push` URLs. Operator commits made *without* the wrapper keep the operator identity — that's intentional (this handoff doc, for example, was operator-committed).
+
+If `AGENT_BOT_CRED_DIR` isn't set, the scripts fall back to looking in `.agent-bot/` at the repo root — that directory doesn't exist in this cell and shouldn't, since we use the colony-shared pattern.
 
 ## Plan
 
@@ -46,7 +70,15 @@ The full design is locked in [`SPEC.md`](./SPEC.md). In particular:
    - `feat/atlas-sqlite-repository` — `infra/` mirroring the queue's pattern, schema migrations.
    - `feat/atlas-mcp-server` — wire the ~10 tools as MCP, register in `.mcp.json`.
    - `chore/atlas-state-md` — update `STATE.md` to reflect atlas running locally, delete this `HANDOFF.md`.
-5. **Per CONTRIBUTING.md**: every PR references the queue task ID. Self-approval is fine. Squash-merge default. `complete_task` only after merge to main.
+5. **For every PR**:
+   - Commits and pushes via `dev-tools/agent-bot/as-bot.sh` (so they're authored by the bot, not the operator).
+   - PR description references the queue task ID.
+   - Squash-merge is the default; bot cannot self-approve (branch protection).
+6. **After opening the PR — exit.** Specifically:
+   - `block_task(task_id, reason="awaiting merge", blocked_on="external")`
+   - `close_session(outcome="awaiting_review")`
+   - **End the session.** Do NOT start the next subtask in the same session.
+   - Operator merges (or, when phase 2 of the colony lands, a listener service spawns a fresh session on merge). Either way, a *new* Claude Code session is what continues — `complete_task` happens at the start of that next session, after which the next branch begins.
 
 ## Constraints
 
@@ -55,6 +87,7 @@ The full design is locked in [`SPEC.md`](./SPEC.md). In particular:
 - **No event sourcing yet** — the spec specifies mutate-in-place storage with status fields. Resist the urge to over-engineer; add an event log later if observability demands it.
 - **Don't implement morphogen here.** Morphogen is a separate cell; atlas just provides the vocabulary it consumes. The two cells share no code.
 - **If a spec choice is wrong** (you discover it during implementation), don't silently work around it. Update `SPEC.md` as part of the PR that diverges, and explain why.
+- **Never `--no-verify` commits.** If a pre-commit hook fails, fix the underlying issue (broken type, lint error, failing test). The hook is the gate that keeps `main` clean.
 
 ## References
 
@@ -62,5 +95,7 @@ The full design is locked in [`SPEC.md`](./SPEC.md). In particular:
 - Template: https://github.com/JSBaxter/stem-cell (HEAD `d2d0c27`, pinned in `.copier-answers.yml`)
 - Architectural reference for the cell pattern: `dev-tools/queue/` (especially `domain/`, `infra/repository.py`, `server.py`, `WORKFLOW.md`)
 - Sister cells in the colony:
-  - [`cytometer`](https://github.com/JSBaxter/cytometer) — different purpose, pre-bootstrap (JS toolchain pending in another session)
-  - `morphogen` — not yet spawned; will consume atlas's tag vocabulary; spec lives at `cells/_designs/morphogen.md`
+  - [`cytometer`](https://github.com/JSBaxter/cytometer) — different purpose; SvelteKit web app, JS toolchain landed.
+  - `morphogen` — not yet spawned; will consume atlas's tag vocabulary; spec lives at `cells/_designs/morphogen.md`.
+  - `colony` — not yet spawned; will hold the docker-compose orchestration for atlas + morphogen + listener service.
+- Bot identity setup: [`dev-tools/agent-bot/README.md`](./dev-tools/agent-bot/README.md) (after copier-update brought it in)
