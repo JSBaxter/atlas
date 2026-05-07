@@ -1,0 +1,16 @@
+# dev-tools
+
+Local-only tools that support the cell's development workflow.
+Everything here runs **on a developer's machine**, not on whatever
+the cell deploys to.
+
+## What's here
+
+- `queue/` — MCP server exposing a task queue for agents. Tracks
+  ideas, scoping, sessions, token usage. Pure-Python, SQLite-backed,
+  fastmcp on top. Built to be registered as an MCP server in
+  whatever client you're using (Claude Code, Cursor, etc.).
+
+If you're about to add something here, check it's actually local
+tooling. If it has an end-user URL or backs a deployed feature, it
+belongs elsewhere in the cell.

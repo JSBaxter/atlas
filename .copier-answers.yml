@@ -1,0 +1,19 @@
+# This file is auto-managed by copier. Do not edit by hand.
+# `copier update` reads it to know which template version this cell is
+# pinned to. Commit it.
+
+_commit: d2d0c27
+_src_path: gh:JSBaxter/stem-cell
+copyright_holder: James Baxter
+copyright_year: 2026
+github_remote: true
+include_agent_container: false
+include_bot_identity: false
+language: python
+license: MIT
+operator_email: james@jsbaxter.dev
+operator_name: James Baxter
+project_description: ''
+project_name: atlas
+project_purpose: Registry of cells and their capabilities. Source of truth for which
+    cells exist and what each can do, expressed as capability tags.
