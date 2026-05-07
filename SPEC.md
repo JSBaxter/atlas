@@ -1,6 +1,6 @@
 # atlas — design spec
 
-> **Status**: pre-implementation. Written before the `atlas` cell has been spawned. When it is, this document moves into the cell as `SPEC.md` (and this file is deleted). Until then it lives at `cells/_designs/atlas.md`.
+> **Status**: pre-implementation. Living spec for the atlas cell — implement against this. Updates as design refinements emerge.
 
 ## Purpose
 
@@ -34,10 +34,19 @@ Atlas is foundational: it depends on no other cell, and many other cells (notabl
 6. **Default match mode = `all`** — when filtering by multiple tags, default narrows (AND). Override via explicit `mode="any"`.
 7. **Implicit prefix matching** — a tag matches its ancestors and descendants in the dot hierarchy in *both* directions. No wildcard syntax. `analysis` matches `analysis.static.python` and vice versa.
 8. **Description required at first registration** — registry stays self-documenting.
+9. **Optional payload schemas per tag** — registered tags can carry an optional JSON schema (`tags.payload_schema`) describing the expected shape of payloads emitted against them. Cells fetch the schema (`get_tag_schema`) and normalize their payloads (strip extras, fill defaults) **before** emitting to morphogen. The bus boundary doesn't enforce schemas — discipline + tooling does. This is the lever that prevents trivial payload variations from fragmenting morphogen's concentration counter.
+10. **Induction lineage tracked bidirectionally** — when a cell is spawned in response to a morphogen-induced need, the spawner registers it with `induced_by=<morphogen_id>`. Atlas enforces "at most one cell per `induced_by`" so spawn races resolve at register-time. `find_induced_by(morphogen_id)` answers "which cells came from which signals?" the other way. Note: `induced_by` is a free-form text pointer — atlas does not validate it against morphogen's storage (separate cells, separate DBs).
 
-## MCP tool surface (~10 tools)
+## MCP tool surface (~15 tools)
 
 ```
+Cell lifecycle (called by cells on spawn):
+  register_cell(name, purpose, repo_url, induced_by?) -> cell_id
+    # idempotent on (name); returns existing cell_id if name already registered
+    # induced_by enforces at-most-one-cell-per-morphogen for spawn-race protection
+  set_cell_status(cell, status)        # active | inactive
+  get_cell(cell) -> {id, name, purpose, repo_url, status, induced_by?, ...}
+
 Capability declarations (called by cells):
   declare_capability(cell, tag, description?) -> {registered, suggestion?}
     # description required only at tag's first-ever registration
@@ -51,6 +60,8 @@ Registry admin (operator-facing):
   list_tags(status?) -> [(tag, description, status, alias_to?, usage_count), ...]
   deprecate_tag(tag, alias_to=?)
   propose_alias(deprecated, canonical)
+  set_tag_schema(tag, schema)
+    # operator-only; attaches/updates optional payload schema for the tag
   sweep_stale_capabilities(threshold_days=14)
     # marks bindings not refreshed in N days as stale; cron-able
 
@@ -59,6 +70,10 @@ Discovery (called by cells/agents):
     # default mode=all; implicit prefix match (both directions in the dot tree)
     # alias resolution applied transparently
     # excludes stale bindings and inactive cells
+  find_induced_by(morphogen_id) -> [cell, ...]
+    # which cell(s) were spawned in response to this morphogen
+  get_tag_schema(tag) -> schema?
+    # returns the optional payload schema attached to a tag, if any
 
 Infrastructure:
   health
@@ -74,14 +89,21 @@ CREATE TABLE cells (
   purpose       TEXT NOT NULL,
   repo_url      TEXT,
   registered_at TIMESTAMP NOT NULL,
-  status        TEXT NOT NULL DEFAULT 'active'  -- active | inactive
+  status        TEXT NOT NULL DEFAULT 'active', -- active | inactive
+  induced_by    TEXT                            -- nullable; morphogen_id pointer
+                                                -- (free-form, not FK validated)
 );
+
+-- At most one cell per morphogen-induced need (spawn race protection)
+CREATE UNIQUE INDEX idx_cells_induced_by ON cells(induced_by) WHERE induced_by IS NOT NULL;
 
 CREATE TABLE tags (
   name           TEXT PRIMARY KEY,        -- "static-analysis"
   description    TEXT NOT NULL,           -- required at first registration
-  status         TEXT NOT NULL DEFAULT 'active',  -- active | deprecated
-  alias_to       TEXT REFERENCES tags(name),      -- nullable
+  status         TEXT NOT NULL DEFAULT 'active', -- active | deprecated
+  alias_to       TEXT REFERENCES tags(name),     -- nullable
+  payload_schema JSON,                           -- nullable; optional JSON schema
+                                                 -- for normalizing emits with this tag
   registered_at  TIMESTAMP NOT NULL,
   registered_by  TEXT NOT NULL REFERENCES cells(id)
 );
@@ -114,6 +136,13 @@ CREATE INDEX idx_tags_status        ON tags(status);
 ### Cell lifecycle
 - `active`: discoverable, capabilities matched
 - `inactive`: not discoverable but record retained
+- `register_cell` is idempotent on `name` — re-registering an existing name returns the existing `cell_id`. Prevents accidental duplicates from re-spawning agents.
+- `induced_by` (when set) is unique across cells — second registration with the same `induced_by` fails with a clear error, resolving spawn-race conditions at register time.
+
+### Tag schema lifecycle
+- A tag's `payload_schema` is set/updated by operator via `set_tag_schema`. There's no schema-versioning story (yet); schema changes apply forward immediately.
+- Cells fetching a stale schema isn't catastrophic — they emit slightly-old-shape payloads, which morphogen accepts; concentration may fragment briefly until cells refresh.
+- For backward-incompatible changes, follow the tag-deprecation pattern: deprecate the old tag, register a new one, alias old → new.
 
 ## Open questions
 
