@@ -10,6 +10,9 @@ the cell deploys to.
   ideas, scoping, sessions, token usage. Pure-Python, SQLite-backed,
   fastmcp on top. Built to be registered as an MCP server in
   whatever client you're using (Claude Code, Cursor, etc.).
+- `agent-bot/` — Wrappers for a separate GitHub App identity used
+  for agent commits and PRs, so the operator account stays a real
+  reviewer.
 
 If you're about to add something here, check it's actually local
 tooling. If it has an end-user URL or backs a deployed feature, it

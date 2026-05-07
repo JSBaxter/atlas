@@ -25,6 +25,8 @@ dist/
 dev-tools/queue/queue.db
 dev-tools/queue/queue.db-*
 
+# Bot identity credentials
+.agent-bot/
 
 # Editor / OS
 .idea/

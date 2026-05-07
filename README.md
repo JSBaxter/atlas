@@ -22,7 +22,7 @@ truth.
 - `dev-tools/`
   Local-only tooling that runs on a developer's machine. Houses
   the bundled `queue/` MCP server, used by every agent working on
-  this cell.
+  this cell.  And `agent-bot/` (GitHub App bot identity wrappers).
 (Add directories here as the cell grows.)
 
 ## Reproduction
