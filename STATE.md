@@ -65,8 +65,16 @@ Operational infrastructure that **is** live for this cell:
   14-day threshold, inactive-cell exclusion; modes `all` /
   `any`), `find_induced_by` (lookup by morphogen pointer; 0 or 1
   cells), `sweep_stale_capabilities` (observational
-  `StaleBindingsReport`; no mutation). With this, the in-memory
-  domain layer is feature-complete; PR 3 swaps in SQLite.
+  `StaleBindingsReport`; no mutation).
+- **SQLite repository** (`src/atlas/infra/`): `SQLiteRepository`
+  implements every `AtlasRepository` method. Schema lives in
+  `schema.sql` per SPEC's tables (cells with unique `induced_by`
+  index, tags with self-referential `alias_to` FK, bindings with
+  composite PK and refresh-time index). `payload_schema`
+  serialized as JSON text. `SQLiteRepository.connect(path)` is
+  the connect-and-init helper. The Registry is repository-agnostic
+  — wiring it against SQLite is a one-line change at
+  construction. PR 4 wires the MCP server on top.
 
 Examples of what will belong here once the cell ships its service:
 
