@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from typing import Any, Protocol
 
@@ -27,7 +27,22 @@ from .events import (
     TagDeprecated,
     TagSchemaSet,
 )
-from .models import CELL_STATUSES, CapabilityBinding, Cell, Tag, TagListing
+from .models import (
+    CELL_STATUSES,
+    CapabilityBinding,
+    Cell,
+    StaleBindingsReport,
+    Tag,
+    TagListing,
+)
+
+STALE_THRESHOLD_DAYS = 14
+"""Bindings with ``last_refreshed_at`` older than this are excluded
+from ``find_capable``. Mirrors the default ``threshold_days`` on
+``sweep_stale_capabilities``. SPEC.md § Heartbeat / Capability
+binding lifecycle."""
+
+_VALID_FIND_MODES: frozenset[str] = frozenset({"all", "any"})
 
 
 class AtlasRepository(Protocol):
@@ -110,6 +125,88 @@ class Registry:
     def get_tag_schema(self, name: str) -> dict[str, Any] | None:
         tag = self.repository.get_tag(name)
         return tag.payload_schema if tag is not None else None
+
+    def find_capable(self, tags: list[str], mode: str = "all") -> list[Cell]:
+        """Return active cells whose fresh bindings cover ``tags``.
+
+        Per SPEC.md § Discovery: implicit dot-hierarchy prefix matching
+        (a tag matches its ancestors and descendants in both
+        directions); transparent alias resolution in both directions
+        (querying canonical also matches cells bound to a deprecated
+        alias of it, since they refer to the same capability); stale
+        bindings excluded (``last_refreshed_at`` older than
+        ``STALE_THRESHOLD_DAYS``); inactive cells excluded.
+        """
+        if mode not in _VALID_FIND_MODES:
+            raise ValueError(
+                f"Invalid mode: {mode!r}. Expected one of {sorted(_VALID_FIND_MODES)}."
+            )
+        if not tags:
+            return []
+
+        stale_threshold = self._compute_stale_threshold(
+            self.now_factory(), STALE_THRESHOLD_DAYS
+        )
+        fresh_bindings = [
+            b
+            for b in self.repository.list_capability_bindings()
+            if b.last_refreshed_at >= stale_threshold
+        ]
+
+        per_query_cells: list[set[str]] = []
+        for query in tags:
+            match_names = self._compute_match_names(query)
+            per_query_cells.append(
+                {b.cell_id for b in fresh_bindings if b.tag in match_names}
+            )
+
+        if mode == "all":
+            cell_ids = set.intersection(*per_query_cells)
+        else:
+            cell_ids = set.union(*per_query_cells)
+
+        cells: list[Cell] = []
+        for cell_id in cell_ids:
+            cell = self.repository.get_cell(cell_id)
+            if cell is not None and cell.status == "active":
+                cells.append(cell)
+        cells.sort(key=lambda c: c.name)
+        return cells
+
+    def find_induced_by(self, morphogen_id: str) -> list[Cell]:
+        """Return cells whose ``induced_by`` matches ``morphogen_id``.
+
+        SPEC enforces at-most-one cell per ``induced_by`` at register
+        time, so the result is 0 or 1 cells. List shape matches
+        ``find_capable`` for caller consistency.
+        """
+        cell = self.repository.get_cell_by_induced_by(morphogen_id)
+        return [cell] if cell is not None else []
+
+    def sweep_stale_capabilities(
+        self, threshold_days: int = STALE_THRESHOLD_DAYS
+    ) -> StaleBindingsReport:
+        """Observational sweep: returns bindings older than the cutoff.
+
+        Atlas's binding schema has no stale-status column; staleness is
+        a read-time computation. Sweep is the operator-facing handle on
+        that computation — use it to surface stale bindings for
+        visibility, not to mutate them.
+        """
+        threshold = self._compute_stale_threshold(self.now_factory(), threshold_days)
+        stale = sorted(
+            (
+                b
+                for b in self.repository.list_capability_bindings()
+                if b.last_refreshed_at < threshold
+            ),
+            key=lambda b: (b.cell_id, b.tag),
+        )
+        return StaleBindingsReport(
+            threshold_days=threshold_days,
+            threshold_iso=threshold,
+            stale_bindings=stale,
+        )
 
     def _handle_register_cell(self, command: RegisterCell) -> list[object]:
         existing_by_name = self.repository.get_cell_by_name(command.name)
@@ -236,6 +333,50 @@ class Registry:
         """Intentional stub. Returns ``[]`` until the similarity
         algorithm lands."""
         return []
+
+    def _compute_match_names(self, query: str) -> set[str]:
+        """Combine alias-equivalent names with their dot-hierarchy
+        expansions to produce the full set of binding-tag names that
+        match the query."""
+        result: set[str] = set()
+        for equivalent in self._equivalent_tag_names(query):
+            result |= self._compute_prefix_match_set(equivalent)
+        return result
+
+    def _equivalent_tag_names(self, name: str) -> set[str]:
+        """Names equivalent to ``name`` via the alias relation: the
+        forward resolution (``name`` → ``alias_to``) and the reverse
+        (any tag aliased to ``name`` or to its canonical). One hop in
+        each direction, matching SPEC's write-time invariant that
+        ``alias_to`` points at an active tag."""
+        equivalents = {name}
+        tag = self.repository.get_tag(name)
+        if tag is not None and tag.alias_to is not None:
+            equivalents.add(tag.alias_to)
+        for other in self.repository.list_tags():
+            if other.alias_to is not None and other.alias_to in equivalents:
+                equivalents.add(other.name)
+        return equivalents
+
+    def _compute_prefix_match_set(self, name: str) -> set[str]:
+        """Dot-hierarchy expansion: ``name`` itself, all of its
+        dot-prefixed ancestors, and all registered tags that descend
+        from it. SPEC.md § Implicit prefix matching."""
+        result = {name}
+        parts = name.split(".")
+        for i in range(1, len(parts)):
+            result.add(".".join(parts[:i]))
+        descendant_prefix = name + "."
+        for tag in self.repository.list_tags():
+            if tag.name.startswith(descendant_prefix):
+                result.add(tag.name)
+        return result
+
+    @staticmethod
+    def _compute_stale_threshold(now_iso: str, threshold_days: int) -> str:
+        now = datetime.fromisoformat(now_iso)
+        threshold = now - timedelta(days=threshold_days)
+        return threshold.isoformat()
 
     def _handle_deprecate_tag(self, command: DeprecateTag) -> list[object]:
         tag = self._require_tag(command.tag)

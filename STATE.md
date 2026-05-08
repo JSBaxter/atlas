@@ -58,9 +58,15 @@ Operational infrastructure that **is** live for this cell:
   one-hop redirect; canonical must be active),
   `set_tag_schema` (attach optional JSON payload schema;
   opaque to atlas), `list_tags` (returns `TagListing` with
-  per-tag `usage_count`), `get_tag_schema`. Discovery ops
-  (`find_capable`, `find_induced_by`, `sweep_stale_capabilities`)
-  land in PR 2c-2.
+  per-tag `usage_count`), `get_tag_schema`.
+- **Discovery** (also in `src/atlas/domain/`): `find_capable`
+  (implicit dot-hierarchy prefix matching in both directions,
+  alias resolution forward AND reverse, stale exclusion via
+  14-day threshold, inactive-cell exclusion; modes `all` /
+  `any`), `find_induced_by` (lookup by morphogen pointer; 0 or 1
+  cells), `sweep_stale_capabilities` (observational
+  `StaleBindingsReport`; no mutation). With this, the in-memory
+  domain layer is feature-complete; PR 3 swaps in SQLite.
 
 Examples of what will belong here once the cell ships its service:
 
