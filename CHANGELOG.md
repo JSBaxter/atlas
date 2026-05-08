@@ -45,6 +45,14 @@ and this cell adheres to [Semantic Versioning](https://semver.org/).
   and sweep-is-observational. The in-memory domain layer is now
   feature-complete; PR 3 swaps in SQLite without touching domain
   code.
+- SQLite repository (`src/atlas/infra/{schema.sql,
+  repository.py}`): `SQLiteRepository` implements every
+  `AtlasRepository` method against SQLite. Schema matches SPEC.md
+  (cells with unique `induced_by` index, tags with self-FK
+  `alias_to`, bindings with composite PK + refresh-time index).
+  `payload_schema` serialized as JSON text. Connect-and-init via
+  `SQLiteRepository.connect(path)`. Registry-with-SQLite smoke
+  tests prove the swap from in-memory is contract-equivalent.
 
 ### Changed
 
