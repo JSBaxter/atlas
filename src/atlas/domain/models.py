@@ -44,3 +44,16 @@ class TagListing:
 
     tag: Tag
     usage_count: int
+
+
+@dataclass(slots=True)
+class StaleBindingsReport:
+    """Returned by ``sweep_stale_capabilities``. Observational: lists
+    bindings with ``last_refreshed_at`` older than the cutoff. The
+    sweep does not mutate state — staleness is computed at read time
+    (see ``find_capable``, which excludes stale bindings using the
+    same threshold)."""
+
+    threshold_days: int
+    threshold_iso: str
+    stale_bindings: list[CapabilityBinding]

@@ -32,7 +32,7 @@ Atlas is foundational: it depends on no other cell, and many other cells (notabl
 4. **No hard delete** — tags are deprecated, not removed. Aliases (operator-managed, one-way) keep references valid.
 5. **Heartbeat** — cells re-declare capabilities weekly. Stale bindings (no refresh in 14 days) get marked stale and excluded from discovery. Catches dead cells naturally.
 6. **Default match mode = `all`** — when filtering by multiple tags, default narrows (AND). Override via explicit `mode="any"`.
-7. **Implicit prefix matching** — a tag matches its ancestors and descendants in the dot hierarchy in *both* directions. No wildcard syntax. `analysis` matches `analysis.static.python` and vice versa.
+7. **Implicit prefix matching** — a tag matches its ancestors and descendants in the dot hierarchy in *both* directions. No wildcard syntax. `analysis` matches `analysis.static.python` and vice versa. Alias resolution applies in both directions too: querying a deprecated alias finds cells bound to its canonical, and querying the canonical also finds cells bound to deprecated aliases of it (the alias relation expresses semantic equivalence).
 8. **Description required at first registration** — registry stays self-documenting.
 9. **Optional payload schemas per tag** — registered tags can carry an optional JSON schema (`tags.payload_schema`) describing the expected shape of payloads emitted against them. Cells fetch the schema (`get_tag_schema`) and normalize their payloads (strip extras, fill defaults) **before** emitting to morphogen. The bus boundary doesn't enforce schemas — discipline + tooling does. This is the lever that prevents trivial payload variations from fragmenting morphogen's concentration counter.
 10. **Induction lineage tracked bidirectionally** — when a cell is spawned in response to a morphogen-induced need, the spawner registers it with `induced_by=<morphogen_id>`. Atlas enforces "at most one cell per `induced_by`" so spawn races resolve at register-time. `find_induced_by(morphogen_id)` answers "which cells came from which signals?" the other way. Note: `induced_by` is a free-form text pointer — atlas does not validate it against morphogen's storage (separate cells, separate DBs).
@@ -135,6 +135,7 @@ CREATE INDEX idx_tags_status        ON tags(status);
 - Bindings with `last_refreshed_at < now - threshold_days` are stale; excluded from `find_capable`
 - Stale bindings remain in the table for audit (no hard delete)
 - `revoke_capability` is a hard delete — distinct from staleness. Stale = "haven't refreshed in a while"; revoke = "I retract this". The cell asserts a clear intent, so audit value is low and the binding goes. The tag itself survives (other cells may still declare it, and it stays addressable for `deprecate_tag`)
+- `sweep_stale_capabilities` is observational — it returns the bindings older than the cutoff but does not mutate them (the binding schema has no stale-status column; staleness is read-time-only). `find_capable` filters stale bindings out at query time using the same threshold. The sweep is the operator-facing handle on that computation
 
 ### Cell lifecycle
 - `active`: discoverable, capabilities matched

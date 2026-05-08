@@ -35,6 +35,16 @@ and this cell adheres to [Semantic Versioning](https://semver.org/).
   `get_tag_schema`. SPEC.md updated to record that `alias_to` must
   point at an active tag at write time, keeping resolution to a
   single hop.
+- Discovery: `find_capable` (implicit dot-hierarchy prefix
+  matching in both directions, transparent alias resolution
+  forward AND reverse, stale-binding exclusion at the 14-day
+  threshold, inactive-cell exclusion; modes `all` / `any`),
+  `find_induced_by`, `sweep_stale_capabilities`
+  (observational — returns `StaleBindingsReport`, no mutation).
+  SPEC.md updated to record alias-resolution-is-bidirectional
+  and sweep-is-observational. The in-memory domain layer is now
+  feature-complete; PR 3 swaps in SQLite without touching domain
+  code.
 
 ### Changed
 

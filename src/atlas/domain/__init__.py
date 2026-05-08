@@ -24,13 +24,15 @@ from .models import (
     TAG_STATUSES,
     CapabilityBinding,
     Cell,
+    StaleBindingsReport,
     Tag,
     TagListing,
 )
-from .registry import AtlasRepository, Registry
+from .registry import STALE_THRESHOLD_DAYS, AtlasRepository, Registry
 
 __all__ = [
     "CELL_STATUSES",
+    "STALE_THRESHOLD_DAYS",
     "TAG_STATUSES",
     "AliasProposed",
     "AtlasRepository",
@@ -51,6 +53,7 @@ __all__ = [
     "RevokeCapability",
     "SetCellStatus",
     "SetTagSchema",
+    "StaleBindingsReport",
     "Tag",
     "TagDeprecated",
     "TagListing",
