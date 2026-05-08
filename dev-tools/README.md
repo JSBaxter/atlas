@@ -10,6 +10,8 @@ the cell deploys to.
   ideas, scoping, sessions, token usage. Pure-Python, SQLite-backed,
   fastmcp on top. Built to be registered as an MCP server in
   whatever client you're using (Claude Code, Cursor, etc.).
+- `agent-container/` — Docker image for running Claude Code with
+  full in-container autonomy and bounded blast radius.
 - `agent-bot/` — Wrappers for a separate GitHub App identity used
   for agent commits and PRs, so the operator account stays a real
   reviewer.

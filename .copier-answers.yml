@@ -7,7 +7,7 @@ _src_path: gh:JSBaxter/stem-cell
 copyright_holder: James Baxter
 copyright_year: 2026
 github_remote: true
-include_agent_container: false
+include_agent_container: true
 include_bot_identity: true
 language: python
 license: MIT
