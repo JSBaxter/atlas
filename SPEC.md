@@ -130,8 +130,10 @@ CREATE INDEX idx_tags_status        ON tags(status);
 ### Capability binding lifecycle
 - Bindings track `(cell, tag, declared_at, last_refreshed_at)`
 - `refresh_capabilities` extends `last_refreshed_at` on all of a cell's bindings to now
+- `declare_capability` against an existing `(cell, tag)` is the same path: `last_refreshed_at` is bumped, `declared_at` is preserved
 - Bindings with `last_refreshed_at < now - threshold_days` are stale; excluded from `find_capable`
 - Stale bindings remain in the table for audit (no hard delete)
+- `revoke_capability` is a hard delete — distinct from staleness. Stale = "haven't refreshed in a while"; revoke = "I retract this". The cell asserts a clear intent, so audit value is low and the binding goes. The tag itself survives (other cells may still declare it, and it stays addressable for `deprecate_tag`)
 
 ### Cell lifecycle
 - `active`: discoverable, capabilities matched

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from .models import Cell
+from .models import CapabilityBinding, Cell, Tag
 
 
 @dataclass(slots=True)
@@ -37,3 +37,41 @@ class CellInductionConflict:
 @dataclass(slots=True)
 class CellStatusChanged:
     cell: Cell
+
+
+@dataclass(slots=True)
+class CapabilityDeclared:
+    """Returned from ``declare_capability``.
+
+    ``tag_was_new`` is ``True`` iff this call also auto-registered the
+    tag. ``suggestions`` lists existing tag names close to the declared
+    one for fragmentation prevention; empty until the similarity
+    algorithm lands.
+    """
+
+    binding: CapabilityBinding
+    tag: Tag
+    tag_was_new: bool
+    suggestions: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class CapabilityRevoked:
+    """Returned from ``revoke_capability``.
+
+    ``was_present`` is ``False`` when the cell had no binding for the
+    tag — the call still succeeds (idempotent retract).
+    """
+
+    cell_id: str
+    tag: str
+    was_present: bool
+
+
+@dataclass(slots=True)
+class CapabilitiesRefreshed:
+    """Returned from ``refresh_capabilities`` — the heartbeat path that
+    bumps ``last_refreshed_at`` on all of a cell's bindings."""
+
+    cell_id: str
+    refreshed_count: int

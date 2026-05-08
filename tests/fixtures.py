@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from atlas.domain.models import Cell
+from atlas.domain.models import CapabilityBinding, Cell, Tag
 
 
 class InMemoryRepository:
@@ -14,6 +14,8 @@ class InMemoryRepository:
 
     def __init__(self) -> None:
         self.cells: dict[str, Cell] = {}
+        self.tags: dict[str, Tag] = {}
+        self.bindings: dict[tuple[str, str], CapabilityBinding] = {}
 
     def add_cell(self, cell: Cell) -> None:
         self.cells[cell.id] = replace(cell)
@@ -42,6 +44,36 @@ class InMemoryRepository:
         if status is not None:
             cells = [cell for cell in cells if cell.status == status]
         return cells
+
+    def add_tag(self, tag: Tag) -> None:
+        self.tags[tag.name] = replace(tag)
+
+    def get_tag(self, name: str) -> Tag | None:
+        tag = self.tags.get(name)
+        return replace(tag) if tag is not None else None
+
+    def add_capability_binding(self, binding: CapabilityBinding) -> None:
+        self.bindings[(binding.cell_id, binding.tag)] = replace(binding)
+
+    def update_capability_binding(self, binding: CapabilityBinding) -> None:
+        self.bindings[(binding.cell_id, binding.tag)] = replace(binding)
+
+    def get_capability_binding(
+        self, cell_id: str, tag: str
+    ) -> CapabilityBinding | None:
+        binding = self.bindings.get((cell_id, tag))
+        return replace(binding) if binding is not None else None
+
+    def list_capability_bindings(
+        self, cell_id: str | None = None
+    ) -> list[CapabilityBinding]:
+        bindings = [replace(binding) for binding in self.bindings.values()]
+        if cell_id is not None:
+            bindings = [binding for binding in bindings if binding.cell_id == cell_id]
+        return bindings
+
+    def delete_capability_binding(self, cell_id: str, tag: str) -> bool:
+        return self.bindings.pop((cell_id, tag), None) is not None
 
 
 class FakeClock:

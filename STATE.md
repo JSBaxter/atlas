@@ -45,8 +45,15 @@ Operational infrastructure that **is** live for this cell:
   operations live (`register_cell` with idempotence + induced_by
   spawn-race protection, `set_cell_status`, `get_cell`,
   `list_cells`). Storage-agnostic — backed by an in-memory test
-  fixture only (no SQLite yet). Capability + tag operations land in
-  PRs 2b/2c.
+  fixture only (no SQLite yet).
+- **Capability declarations** (also in `src/atlas/domain/`):
+  `declare_capability` (auto-registers tag on first declare;
+  description required at first registration; suggestion field
+  plumbed through but stubbed at `[]`), `revoke_capability` (hard
+  delete; tag survives), `refresh_capabilities` (heartbeat —
+  bumps `last_refreshed_at` on all of a cell's bindings),
+  `list_capabilities`. Tag-admin and discovery operations land in
+  PR 2c.
 
 Examples of what will belong here once the cell ships its service:
 

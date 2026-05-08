@@ -1,5 +1,14 @@
-from .commands import RegisterCell, SetCellStatus
+from .commands import (
+    DeclareCapability,
+    RefreshCapabilities,
+    RegisterCell,
+    RevokeCapability,
+    SetCellStatus,
+)
 from .events import (
+    CapabilitiesRefreshed,
+    CapabilityDeclared,
+    CapabilityRevoked,
     CellInductionConflict,
     CellRegistered,
     CellStatusChanged,
@@ -17,13 +26,19 @@ __all__ = [
     "CELL_STATUSES",
     "TAG_STATUSES",
     "AtlasRepository",
+    "CapabilitiesRefreshed",
     "CapabilityBinding",
+    "CapabilityDeclared",
+    "CapabilityRevoked",
     "Cell",
     "CellInductionConflict",
     "CellRegistered",
     "CellStatusChanged",
+    "DeclareCapability",
+    "RefreshCapabilities",
     "RegisterCell",
     "Registry",
+    "RevokeCapability",
     "SetCellStatus",
     "Tag",
 ]
