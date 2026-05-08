@@ -10,6 +10,11 @@ and this cell adheres to [Semantic Versioning](https://semver.org/).
 
 - Initial cell scaffold from
   [`stem-cell`](https://github.com/JSBaxter/stem-cell).
+- Cell-root Python project (`pyproject.toml`, `src/atlas/`,
+  `tests/`) with `uv`, `ruff`, `ty`, and `pytest` wired up via
+  pre-commit hooks. Smoke tests pass; no feature code yet. CI mirror
+  pending (bot lacks `workflows` permission to push workflow
+  changes — see STATE.md).
 
 ### Changed
 

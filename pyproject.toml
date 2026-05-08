@@ -1,0 +1,24 @@
+[project]
+name = "atlas"
+version = "0.0.1"
+description = "Registry of cells and their capabilities. Source of truth for which cells exist and what each can do, expressed as capability tags."
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.15.12",
+    "ty>=0.0.34",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.uv]
+package = false

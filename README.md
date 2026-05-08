@@ -19,6 +19,12 @@ truth.
 
 ## Active directories
 
+- `src/atlas/`
+  The atlas Python package — the cell's primary purpose. MCP server
+  + capability registry. Currently bones only; see `SPEC.md` for the
+  designed surface.
+- `tests/`
+  Pytest suite for `src/atlas/`.
 - `dev-tools/`
   Local-only tooling that runs on a developer's machine. Houses
   the bundled `queue/` MCP server, used by every agent working on

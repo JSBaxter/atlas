@@ -32,6 +32,14 @@ Operational infrastructure that **is** live for this cell:
 - **Branch protection on `main`**: requires a PR with at least one
   approving review (operator approves bot's PRs); dismisses stale
   reviews on push; no force pushes; no deletions.
+- **Cell-root Python project**: `pyproject.toml` at repo root,
+  package skeleton at `src/atlas/`, tests at `tests/`. Managed via
+  `uv`. Toolchain: `ruff` (format + lint), `ty` (type check),
+  `pytest`. Pre-commit hooks gate atlas changes locally; CI
+  (`.github/workflows/quality.yml`) does **not** yet run the atlas
+  job — adding it is blocked by the bot lacking the GitHub App
+  `workflows` permission. Follow-up needed. No feature code yet —
+  bones only.
 
 Examples of what will belong here once the cell ships its service:
 
