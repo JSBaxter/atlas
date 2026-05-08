@@ -11,6 +11,34 @@
 repos:
   - repo: local
     hooks:
+      - id: atlas-ruff-format
+        name: atlas — ruff format
+        entry: uv run ruff format --check src tests
+        language: system
+        files: ^(src/atlas|tests)/.*\.py$|^pyproject\.toml$
+        pass_filenames: false
+
+      - id: atlas-ruff-lint
+        name: atlas — ruff check
+        entry: uv run ruff check src tests
+        language: system
+        files: ^(src/atlas|tests)/.*\.py$|^pyproject\.toml$
+        pass_filenames: false
+
+      - id: atlas-ty
+        name: atlas — ty
+        entry: uv run ty check src tests
+        language: system
+        files: ^(src/atlas|tests)/.*\.py$|^pyproject\.toml$
+        pass_filenames: false
+
+      - id: atlas-pytest
+        name: atlas — pytest
+        entry: uv run pytest -q
+        language: system
+        files: ^(src/atlas|tests)/.*\.py$|^pyproject\.toml$
+        pass_filenames: false
+
       - id: queue-ruff-format
         name: queue — ruff format
         entry: uv run --directory dev-tools/queue ruff format --check
