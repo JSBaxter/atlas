@@ -20,9 +20,20 @@ real artifact.
 
 ## What's running
 
-Nothing yet.
+Atlas service is not implemented yet — no MCP server is up.
 
-Examples of what would belong here once the cell has output:
+Operational infrastructure that **is** live for this cell:
+
+- **Bot identity**: `jb-colony-bot` (GitHub App, ID `3638446`,
+  install `130427381`). Credentials at `~/.config/colony-bot/`
+  on the operator workstation. Used via
+  `dev-tools/agent-bot/as-bot.sh` (set
+  `AGENT_BOT_CRED_DIR=~/.config/colony-bot/`).
+- **Branch protection on `main`**: requires a PR with at least one
+  approving review (operator approves bot's PRs); dismisses stale
+  reviews on push; no force pushes; no deletions.
+
+Examples of what will belong here once the cell ships its service:
 
 - A service or daemon, with where it runs and the address it's
   reachable at
