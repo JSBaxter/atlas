@@ -126,6 +126,7 @@ CREATE INDEX idx_tags_status        ON tags(status);
 ### Tag lifecycle
 - `active`: in use, can be declared and matched
 - `deprecated`: no longer canonical; if `alias_to` is set, references resolve transparently to the canonical tag at lookup time
+- `alias_to` must point at an *active* tag at write time (`deprecate_tag` and `propose_alias` reject otherwise). This keeps alias resolution to a single hop in `find_capable`. If a chain becomes desirable later, lookup can grow to follow multiple hops without changing the on-disk shape
 
 ### Capability binding lifecycle
 - Bindings track `(cell, tag, declared_at, last_refreshed_at)`

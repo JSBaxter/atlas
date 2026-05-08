@@ -52,8 +52,15 @@ Operational infrastructure that **is** live for this cell:
   plumbed through but stubbed at `[]`), `revoke_capability` (hard
   delete; tag survives), `refresh_capabilities` (heartbeat —
   bumps `last_refreshed_at` on all of a cell's bindings),
-  `list_capabilities`. Tag-admin and discovery operations land in
-  PR 2c.
+  `list_capabilities`.
+- **Tag admin** (also in `src/atlas/domain/`): `deprecate_tag`
+  (with optional `alias_to`), `propose_alias` (operator-managed
+  one-hop redirect; canonical must be active),
+  `set_tag_schema` (attach optional JSON payload schema;
+  opaque to atlas), `list_tags` (returns `TagListing` with
+  per-tag `usage_count`), `get_tag_schema`. Discovery ops
+  (`find_capable`, `find_induced_by`, `sweep_stale_capabilities`)
+  land in PR 2c-2.
 
 Examples of what will belong here once the cell ships its service:
 

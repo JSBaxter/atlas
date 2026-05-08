@@ -28,6 +28,13 @@ and this cell adheres to [Semantic Versioning](https://semver.org/).
   Suggestion field returns `[]` until the similarity algorithm
   lands. SPEC.md updated to record `revoke = hard delete`,
   distinct from staleness.
+- Tag admin: `deprecate_tag` (with optional `alias_to`),
+  `propose_alias` (operator-managed redirect; canonical must be
+  active), `set_tag_schema` (opaque JSON payload schema),
+  `list_tags` (returns `TagListing` with per-tag `usage_count`),
+  `get_tag_schema`. SPEC.md updated to record that `alias_to` must
+  point at an active tag at write time, keeping resolution to a
+  single hop.
 
 ### Changed
 

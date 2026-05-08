@@ -75,3 +75,26 @@ class CapabilitiesRefreshed:
 
     cell_id: str
     refreshed_count: int
+
+
+@dataclass(slots=True)
+class TagDeprecated:
+    """Returned from ``deprecate_tag``. ``alias_to`` reflects the
+    canonical replacement when one was provided, else ``None``."""
+
+    tag: Tag
+
+
+@dataclass(slots=True)
+class AliasProposed:
+    """Returned from ``propose_alias`` with the updated tag carrying
+    its new ``alias_to``."""
+
+    tag: Tag
+
+
+@dataclass(slots=True)
+class TagSchemaSet:
+    """Returned from ``set_tag_schema`` with the updated tag."""
+
+    tag: Tag
