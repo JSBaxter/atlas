@@ -15,6 +15,11 @@ and this cell adheres to [Semantic Versioning](https://semver.org/).
   pre-commit hooks. Smoke tests pass; no feature code yet. CI mirror
   pending (bot lacks `workflows` permission to push workflow
   changes — see STATE.md).
+- Domain layer foundation: `Cell`, `Tag`, `CapabilityBinding`
+  models, `AtlasRepository` Protocol, `Registry` service.
+  Cell-lifecycle operations: `register_cell` (idempotent on name,
+  spawn-race-safe via unique `induced_by`), `set_cell_status`,
+  `get_cell`, `list_cells`. In-memory test fixture only.
 
 ### Changed
 
