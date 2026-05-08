@@ -20,6 +20,14 @@ and this cell adheres to [Semantic Versioning](https://semver.org/).
   Cell-lifecycle operations: `register_cell` (idempotent on name,
   spawn-race-safe via unique `induced_by`), `set_cell_status`,
   `get_cell`, `list_cells`. In-memory test fixture only.
+- Capability declarations: `declare_capability` (auto-registers
+  tag on first declare; description required at first
+  registration; re-declare bumps `last_refreshed_at`),
+  `revoke_capability` (hard delete; tag survives),
+  `refresh_capabilities` (heartbeat), `list_capabilities`.
+  Suggestion field returns `[]` until the similarity algorithm
+  lands. SPEC.md updated to record `revoke = hard delete`,
+  distinct from staleness.
 
 ### Changed
 
