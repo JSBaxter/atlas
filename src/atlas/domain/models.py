@@ -35,3 +35,12 @@ class CapabilityBinding:
     tag: str
     declared_at: str
     last_refreshed_at: str
+
+
+@dataclass(slots=True)
+class TagListing:
+    """View returned by ``list_tags`` — bundles a tag with its
+    usage count (number of distinct cells with bindings to it)."""
+
+    tag: Tag
+    usage_count: int

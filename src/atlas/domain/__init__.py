@@ -1,17 +1,23 @@
 from .commands import (
     DeclareCapability,
+    DeprecateTag,
+    ProposeAlias,
     RefreshCapabilities,
     RegisterCell,
     RevokeCapability,
     SetCellStatus,
+    SetTagSchema,
 )
 from .events import (
+    AliasProposed,
     CapabilitiesRefreshed,
     CapabilityDeclared,
     CapabilityRevoked,
     CellInductionConflict,
     CellRegistered,
     CellStatusChanged,
+    TagDeprecated,
+    TagSchemaSet,
 )
 from .models import (
     CELL_STATUSES,
@@ -19,12 +25,14 @@ from .models import (
     CapabilityBinding,
     Cell,
     Tag,
+    TagListing,
 )
 from .registry import AtlasRepository, Registry
 
 __all__ = [
     "CELL_STATUSES",
     "TAG_STATUSES",
+    "AliasProposed",
     "AtlasRepository",
     "CapabilitiesRefreshed",
     "CapabilityBinding",
@@ -35,10 +43,16 @@ __all__ = [
     "CellRegistered",
     "CellStatusChanged",
     "DeclareCapability",
+    "DeprecateTag",
+    "ProposeAlias",
     "RefreshCapabilities",
     "RegisterCell",
     "Registry",
     "RevokeCapability",
     "SetCellStatus",
+    "SetTagSchema",
     "Tag",
+    "TagDeprecated",
+    "TagListing",
+    "TagSchemaSet",
 ]

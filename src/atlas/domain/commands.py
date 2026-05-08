@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -33,3 +34,21 @@ class RevokeCapability:
 @dataclass(slots=True)
 class RefreshCapabilities:
     cell_id: str
+
+
+@dataclass(slots=True)
+class DeprecateTag:
+    tag: str
+    alias_to: str | None = None
+
+
+@dataclass(slots=True)
+class ProposeAlias:
+    deprecated: str
+    canonical: str
+
+
+@dataclass(slots=True)
+class SetTagSchema:
+    tag: str
+    schema: dict[str, Any] | None

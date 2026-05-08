@@ -48,9 +48,18 @@ class InMemoryRepository:
     def add_tag(self, tag: Tag) -> None:
         self.tags[tag.name] = replace(tag)
 
+    def update_tag(self, tag: Tag) -> None:
+        self.tags[tag.name] = replace(tag)
+
     def get_tag(self, name: str) -> Tag | None:
         tag = self.tags.get(name)
         return replace(tag) if tag is not None else None
+
+    def list_tags(self, status: str | None = None) -> list[Tag]:
+        tags = [replace(tag) for tag in self.tags.values()]
+        if status is not None:
+            tags = [tag for tag in tags if tag.status == status]
+        return tags
 
     def add_capability_binding(self, binding: CapabilityBinding) -> None:
         self.bindings[(binding.cell_id, binding.tag)] = replace(binding)

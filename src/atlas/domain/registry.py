@@ -4,24 +4,30 @@ from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from secrets import token_urlsafe
-from typing import Protocol
+from typing import Any, Protocol
 
 from .commands import (
     DeclareCapability,
+    DeprecateTag,
+    ProposeAlias,
     RefreshCapabilities,
     RegisterCell,
     RevokeCapability,
     SetCellStatus,
+    SetTagSchema,
 )
 from .events import (
+    AliasProposed,
     CapabilitiesRefreshed,
     CapabilityDeclared,
     CapabilityRevoked,
     CellInductionConflict,
     CellRegistered,
     CellStatusChanged,
+    TagDeprecated,
+    TagSchemaSet,
 )
-from .models import CELL_STATUSES, CapabilityBinding, Cell, Tag
+from .models import CELL_STATUSES, CapabilityBinding, Cell, Tag, TagListing
 
 
 class AtlasRepository(Protocol):
@@ -32,7 +38,9 @@ class AtlasRepository(Protocol):
     def get_cell_by_induced_by(self, induced_by: str) -> Cell | None: ...
     def list_cells(self, status: str | None = None) -> list[Cell]: ...
     def add_tag(self, tag: Tag) -> None: ...
+    def update_tag(self, tag: Tag) -> None: ...
     def get_tag(self, name: str) -> Tag | None: ...
+    def list_tags(self, status: str | None = None) -> list[Tag]: ...
     def add_capability_binding(self, binding: CapabilityBinding) -> None: ...
     def update_capability_binding(self, binding: CapabilityBinding) -> None: ...
     def get_capability_binding(
@@ -72,6 +80,12 @@ class Registry:
             return self._handle_revoke_capability(command)
         if isinstance(command, RefreshCapabilities):
             return self._handle_refresh_capabilities(command)
+        if isinstance(command, DeprecateTag):
+            return self._handle_deprecate_tag(command)
+        if isinstance(command, ProposeAlias):
+            return self._handle_propose_alias(command)
+        if isinstance(command, SetTagSchema):
+            return self._handle_set_tag_schema(command)
         raise TypeError(f"Unknown command: {type(command).__name__}")
 
     def get_cell(self, cell_id: str) -> Cell | None:
@@ -82,6 +96,20 @@ class Registry:
 
     def list_capabilities(self, cell_id: str | None = None) -> list[CapabilityBinding]:
         return self.repository.list_capability_bindings(cell_id=cell_id)
+
+    def list_tags(self, status: str | None = None) -> list[TagListing]:
+        tags = self.repository.list_tags(status=status)
+        usage: dict[str, set[str]] = {}
+        for binding in self.repository.list_capability_bindings():
+            usage.setdefault(binding.tag, set()).add(binding.cell_id)
+        return [
+            TagListing(tag=tag, usage_count=len(usage.get(tag.name, set())))
+            for tag in tags
+        ]
+
+    def get_tag_schema(self, name: str) -> dict[str, Any] | None:
+        tag = self.repository.get_tag(name)
+        return tag.payload_schema if tag is not None else None
 
     def _handle_register_cell(self, command: RegisterCell) -> list[object]:
         existing_by_name = self.repository.get_cell_by_name(command.name)
@@ -208,6 +236,52 @@ class Registry:
         """Intentional stub. Returns ``[]`` until the similarity
         algorithm lands."""
         return []
+
+    def _handle_deprecate_tag(self, command: DeprecateTag) -> list[object]:
+        tag = self._require_tag(command.tag)
+        if command.alias_to is not None:
+            self._validate_canonical_target(
+                deprecated_name=command.tag, canonical_name=command.alias_to
+            )
+        updated = replace(tag, status="deprecated", alias_to=command.alias_to)
+        self.repository.update_tag(updated)
+        return [TagDeprecated(tag=updated)]
+
+    def _handle_propose_alias(self, command: ProposeAlias) -> list[object]:
+        tag = self._require_tag(command.deprecated)
+        self._validate_canonical_target(
+            deprecated_name=command.deprecated, canonical_name=command.canonical
+        )
+        updated = replace(tag, alias_to=command.canonical)
+        self.repository.update_tag(updated)
+        return [AliasProposed(tag=updated)]
+
+    def _handle_set_tag_schema(self, command: SetTagSchema) -> list[object]:
+        tag = self._require_tag(command.tag)
+        updated = replace(tag, payload_schema=command.schema)
+        self.repository.update_tag(updated)
+        return [TagSchemaSet(tag=updated)]
+
+    def _validate_canonical_target(
+        self, *, deprecated_name: str, canonical_name: str
+    ) -> None:
+        if deprecated_name == canonical_name:
+            raise ValueError(f"Cannot alias tag {deprecated_name!r} to itself.")
+        canonical = self.repository.get_tag(canonical_name)
+        if canonical is None:
+            raise ValueError(f"Canonical tag {canonical_name!r} does not exist.")
+        if canonical.status != "active":
+            raise ValueError(
+                f"Canonical tag {canonical_name!r} is not active "
+                f"(status={canonical.status!r}); aliases must point at "
+                "active tags so resolution stays one hop."
+            )
+
+    def _require_tag(self, name: str) -> Tag:
+        tag = self.repository.get_tag(name)
+        if tag is None:
+            raise KeyError(f"Unknown tag: {name}")
+        return tag
 
     def _require_cell(self, cell_id: str) -> Cell:
         cell = self.repository.get_cell(cell_id)
