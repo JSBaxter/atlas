@@ -38,8 +38,15 @@ Operational infrastructure that **is** live for this cell:
   `pytest`. Pre-commit hooks gate atlas changes locally; CI
   (`.github/workflows/quality.yml`) does **not** yet run the atlas
   job — adding it is blocked by the bot lacking the GitHub App
-  `workflows` permission. Follow-up needed. No feature code yet —
-  bones only.
+  `workflows` permission. Follow-up needed.
+- **Domain layer foundation** (`src/atlas/domain/`): models
+  (`Cell`, `Tag`, `CapabilityBinding`), `AtlasRepository` Protocol,
+  `Registry` service with command/event dispatch. Cell-lifecycle
+  operations live (`register_cell` with idempotence + induced_by
+  spawn-race protection, `set_cell_status`, `get_cell`,
+  `list_cells`). Storage-agnostic — backed by an in-memory test
+  fixture only (no SQLite yet). Capability + tag operations land in
+  PRs 2b/2c.
 
 Examples of what will belong here once the cell ships its service:
 
