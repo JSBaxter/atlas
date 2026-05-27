@@ -115,8 +115,9 @@ this PR.
 
 ## Trigger mechanics
 
-Today this is honour-system. Whichever agent picks up post-merge
-work is expected to:
+This is wired into CI: every merged PR fires the `cell-build` workflow's
+**post-merge cycle**, which runs ceremonies *before* it pulls new work.
+Whichever agent (or operator) does post-merge work:
 
 1. Note the merged PR number `k`.
 2. For each ceremony `i`, check `k mod n_i`.
@@ -127,6 +128,6 @@ only if it is itself a ceremony PR (no recursion). Closing a
 ceremony in its own PR is fine; firing the next cadence on top of
 it is not.
 
-Long-term, this can be wired into CD: the deploy job opens queue
-tasks for whichever ceremonies match the merged number, so
-triggering is mechanical rather than honour-system.
+Because each ceremony (like any task) lands as its own PR and the agent
+stops after opening one PR, a cadence that fires several ceremonies on the
+same `k` works through them one merge at a time.
