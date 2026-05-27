@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from typing import Any, Protocol
 
+from rapidfuzz.fuzz import token_set_ratio
+
 from .commands import (
     DeclareCapability,
     DeprecateTag,
@@ -330,9 +332,19 @@ class Registry:
         ]
 
     def _suggest_similar_tags(self, name: str) -> list[str]:
-        """Intentional stub. Returns ``[]`` until the similarity
-        algorithm lands."""
-        return []
+        """Return active tags similar to ``name`` using rapidfuzz
+        token_set_ratio. Suggestions help callers avoid fragmenting
+        the vocabulary with near-duplicate tags. Returns up to 5
+        matches scoring >= 70 (permissive; tighten during retro if
+        signal-to-noise is bad — per SPEC § Open questions)."""
+        existing = self.repository.list_tags(status="active")
+        scored = [
+            (token_set_ratio(name, tag.name), tag.name)
+            for tag in existing
+            if tag.name != name
+        ]
+        scored.sort(reverse=True)
+        return [tag_name for score, tag_name in scored if score >= 70][:5]
 
     def _compute_match_names(self, query: str) -> set[str]:
         """Combine alias-equivalent names with their dot-hierarchy

@@ -13,14 +13,24 @@ The structure stays even when the content doesn't.
 
 Registry of cells and their capabilities. Source of truth for which cells exist and what each can do, expressed as capability tags.
 
-Nothing live yet — fill this in once the cell ships its first
-real artifact.
+The atlas MCP server (`src/atlas/server.py`) exposes 16 tools covering cell lifecycle, capability declarations, tag administration, discovery, and infrastructure. Other cells and agents call it to register, declare, and look up capabilities.
 
 ---
 
 ## What's running
 
-Atlas service is not implemented yet — no MCP server is up.
+**Atlas MCP server** (`src/atlas/server.py`):
+- Transport: stdio (for MCP client integration)
+- Entry point: `uv run atlas --transport stdio` (registered in `.mcp.json`)
+- Storage: SQLite at `./atlas.db` (path configurable via `--db`)
+- 16 tools: cell lifecycle (`register_cell`, `set_cell_status`, `get_cell`,
+  `list_cells`), capability declarations (`declare_capability`,
+  `revoke_capability`, `refresh_capabilities`, `list_capabilities`), registry
+  admin (`list_tags`, `deprecate_tag`, `propose_alias`, `set_tag_schema`,
+  `sweep_stale_capabilities`), discovery (`find_capable`, `find_induced_by`,
+  `get_tag_schema`), infrastructure (`health`, `ensure_registry`)
+- Similarity for fragmentation prevention: rapidfuzz `token_set_ratio`, ≥ 70
+  score threshold, up to 5 suggestions
 
 Operational infrastructure that **is** live for this cell:
 
@@ -91,7 +101,9 @@ Examples of what will belong here once the cell ships its service:
 
 ### Build / runtime
 
-- Python  (managed via `uv`)
+- Python (managed via `uv`; package = true, build backend = `uv_build`)
+- `fastmcp>=2.0` — MCP server framework
+- `rapidfuzz>=3.0` — tag similarity (fragmentation prevention)
 - The bundled queue runtime under `dev-tools/queue/` brings its own
   Python project
 ### External
