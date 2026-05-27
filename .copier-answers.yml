@@ -2,8 +2,9 @@
 # `copier update` reads it to know which template version this cell is
 # pinned to. Commit it.
 
-_commit: e32abff
+_commit: 9ab62a1
 _src_path: gh:JSBaxter/stem-cell
+colony_bot_login: jb-colony-bot[bot]
 copyright_holder: James Baxter
 copyright_year: 2026
 github_remote: true
