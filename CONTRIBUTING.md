@@ -267,6 +267,33 @@ type, ticked off>
 - Squash-merge is the default
 - Delete the branch after merge
 
+### Automated builds (`cell-build` workflow)
+
+`.github/workflows/cell-build.yml` lets the operator (and, if configured,
+the colony bot) drive Claude from GitHub events: a `claude-build`-labelled
+issue, an `@claude` comment on such an issue, an operator PR review or
+review comment, or a manual `workflow_dispatch`. **Only the operator and
+the colony bot can trigger a run** — a job-level `if:` plus a verify step
+fail closed for anyone else, and repo interaction limits are a second
+layer. Claude's work is committed and a PR prepared under the colony bot
+App identity, so the operator stays a real reviewer.
+
+It needs these repo secrets (set once per cell, or shared at user level):
+`CLAUDE_ACCESS_TOKEN`, `CLAUDE_REFRESH_TOKEN`, `CLAUDE_EXPIRES_AT` (the
+Claude OAuth triple from `claude setup-token`), `SECRETS_ADMIN_PAT` (a
+fine-grained PAT with `secrets:write` for OAuth refresh), and
+`COLONY_BOT_APP_ID` + `COLONY_BOT_PRIVATE_KEY` (the colony App used by
+`dev-tools/agent-bot/`). The App must have `issues:write`,
+`contents:write`, and `pull-requests:write`, and be installed on every
+cell it should reach.
+
+The workflow runs the queue (the cell's memory) and persists its SQLite DB
+between runs on an orphan **`colony/queue-state`** branch — the bot commits
+`queue.db` there at the end of each run and restores it at the start. That
+branch holds only the DB; don't merge it into `main`. Runs are serialized
+(`concurrency`) so they never race on it. Note this is a CI-side queue,
+separate from any local queue on the operator's workstation.
+
 ---
 
 ## Testing

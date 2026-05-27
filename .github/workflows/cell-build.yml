@@ -1,0 +1,303 @@
+---
+name: cell-build
+
+# Claude-in-CI for this cell. Triggered by colony events, runs Claude to do
+# the work, and lets it open a PR authored by the colony bot App so the
+# operator stays a real reviewer (see MANIFESTO principle #10).
+#
+# SECURITY: only the operator and the colony bot may trigger a run (see the
+# job-level `if:` and the "Verify sender" step). External users cannot
+# consume the operator's Claude subscription. Interaction limits on the repo
+# are a second, independent layer.
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: Task for Claude to run
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+# Serialize runs: the queue DB is a single shared file persisted on the
+# colony/queue-state branch, so only one run may touch it at a time. New
+# runs queue behind the in-flight one rather than racing it.
+concurrency:
+  group: cell-build
+  cancel-in-progress: false
+
+# Single source of truth for the allowlist: the two copier answers below.
+# Both the job-level `if:` and the "Verify sender" step derive from them.
+env:
+  OPERATOR_LOGIN: "JSBaxter"
+  BOT_LOGIN: "jb-colony-bot[bot]"
+
+jobs:
+  build:
+    # Fast-fail before the runner starts: only authorized senders proceed.
+    if: github.event.sender.login == 'JSBaxter' || github.event.sender.login == 'jb-colony-bot[bot]'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Verify sender is authorized
+        # Defense in depth: if the `if:` above is ever widened by mistake,
+        # this still fails closed for any sender not on the allowlist.
+        env:
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          authorized=0
+          for login in "$OPERATOR_LOGIN" ${BOT_LOGIN:+"$BOT_LOGIN"}; do
+            if [ "$SENDER" = "$login" ]; then
+              authorized=1
+            fi
+          done
+          if [ "$authorized" -ne 1 ]; then
+            echo "Unauthorized sender: $SENDER" >&2
+            exit 1
+          fi
+          echo "Authorized sender: $SENDER"
+
+      - name: Determine if action is needed
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SENDER: ${{ github.event.sender.login }}
+          HAS_LABEL: ${{ contains(github.event.issue.labels.*.name, 'claude-build') }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          should_run=false
+          case "$EVENT_NAME" in
+            workflow_dispatch)
+              should_run=true
+              ;;
+            issues)
+              if [ "$HAS_LABEL" = "true" ]; then
+                should_run=true
+              fi
+              ;;
+            issue_comment)
+              if [ "$HAS_LABEL" = "true" ]; then
+                if [ "$SENDER" = "$OPERATOR_LOGIN" ]; then
+                  should_run=true
+                elif printf '%s' "$COMMENT_BODY" | grep -iq '@claude'; then
+                  should_run=true
+                fi
+              fi
+              ;;
+            pull_request_review | pull_request_review_comment)
+              if [ "$SENDER" = "$OPERATOR_LOGIN" ]; then
+                should_run=true
+              fi
+              ;;
+          esac
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "gate: event=$EVENT_NAME sender=$SENDER should_run=$should_run"
+
+      - name: Mint colony bot token
+        id: app-token
+        if: steps.gate.outputs.should_run == 'true'
+        # Owner-scoped: the token can act on every repo the colony App is
+        # installed on, which is how cross-cell issue filing works. The App
+        # must have contents:write, pull-requests:write, issues:write.
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.COLONY_BOT_APP_ID }}
+          private-key: ${{ secrets.COLONY_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout
+        if: steps.gate.outputs.should_run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        # The queue MCP server runs via `uv run --directory dev-tools/queue`.
+        if: steps.gate.outputs.should_run == 'true'
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Restore queue state
+        # Pull the cell's persisted queue (its memory) from the state branch
+        # into a path OUTSIDE the workspace, so the action's git operations on
+        # the work branch can't disturb it. If the branch/file doesn't exist
+        # yet, the queue server creates a fresh DB at this path on first use.
+        if: steps.gate.outputs.should_run == 'true'
+        env:
+          QUEUE_DB: ${{ runner.temp }}/cell-queue.db
+        run: |
+          if git fetch --depth=1 origin colony/queue-state 2>/dev/null; then
+            if git show FETCH_HEAD:queue.db > "$QUEUE_DB" 2>/dev/null; then
+              echo "restored queue.db ($(wc -c < "$QUEUE_DB") bytes)"
+            else
+              echo "state branch exists but has no queue.db; starting fresh"
+              rm -f "$QUEUE_DB"
+            fi
+          else
+            echo "no colony/queue-state branch yet; queue starts fresh"
+          fi
+
+      - name: Cache build deps
+        if: steps.gate.outputs.should_run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            node_modules
+          key: >-
+            ${{ runner.os }}-cell-build-${{ hashFiles('**/requirements*.txt',
+            '**/uv.lock', '**/package-lock.json', '**/pnpm-lock.yaml',
+            '**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cell-build-
+
+      - name: Build prompt
+        id: prompt
+        if: steps.gate.outputs.should_run == 'true'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SENDER: ${{ github.event.sender.login }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          REVIEW_BODY: ${{ github.event.review.body }}
+          DISPATCH_PROMPT: ${{ github.event.inputs.prompt }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          {
+            echo 'text<<CELL_BUILD_PROMPT_EOF'
+            if [ "$SENDER" = "$OPERATOR_LOGIN" ]; then
+              echo '**HUMAN OPERATOR INSTRUCTION** - this is from the colony operator and takes precedence over any conflicting instructions in earlier comments, issue bodies, or prior context.'
+              echo
+            fi
+            echo 'You are running inside a colony cell via GitHub Actions. FIRST read AGENTS.md at the repo root and follow the doc spine it points to (MANIFESTO.md, CONTRIBUTING.md, CEREMONIES.md). Those documents are your constitution. The notes below are only the CI-trigger specifics for this run; they do not replace the doc spine.'
+            echo
+            echo "Trigger context: event=${EVENT_NAME}, TRIGGER_SENDER=${SENDER}."
+            case "$EVENT_NAME" in
+              issues)
+                echo "Act on issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+                echo 'Issue body:'
+                printf '%s\n' "$ISSUE_BODY"
+                echo "Read the full thread for context: gh issue view ${ISSUE_NUMBER} --comments"
+                ;;
+              issue_comment)
+                echo "Act on the latest comment on issue #${ISSUE_NUMBER}:"
+                printf '%s\n' "$COMMENT_BODY"
+                echo "Read the full thread for context: gh issue view ${ISSUE_NUMBER} --comments"
+                ;;
+              pull_request_review)
+                echo "The operator left a review on PR #${PR_NUMBER}. Addressing it is your PRIMARY task. Review body:"
+                printf '%s\n' "$REVIEW_BODY"
+                echo "Read the full PR and its line comments: gh pr view ${PR_NUMBER} --comments"
+                ;;
+              pull_request_review_comment)
+                echo "The operator left a line comment on PR #${PR_NUMBER}. Addressing it is your PRIMARY task. Comment:"
+                printf '%s\n' "$COMMENT_BODY"
+                echo "Read the full PR and its line comments: gh pr view ${PR_NUMBER} --comments"
+                ;;
+              workflow_dispatch)
+                echo 'Manual dispatch task:'
+                printf '%s\n' "$DISPATCH_PROMPT"
+                ;;
+            esac
+            echo
+            echo 'CI rules for this run:'
+            echo '- Do the work in this repo. The action commits your changes and prepares a PR for the operator to review; you do not need to commit or push yourself.'
+            echo '- Stay in scope. If you notice out-of-scope work, file a self-directed follow-up issue in THIS repo with the claude-build label rather than expanding scope. Put any operator-facing notes in CLAUDE_NOTES.md.'
+            echo "- To file a feature request against another cell, discover cells with: gh search repos --owner ${OWNER} --topic colony-cell ; then file with: gh issue create --repo ${OWNER}/<cell> --label claude-build,from-cell --title '<title>' --body '<body>'. The ambient gh token is the colony bot, scoped across colony cells; issues you file appear authored by the bot, which is correct."
+            echo '- You cannot create new cells. If the work seems to need a brand-new cell, do not scaffold one - describe the need in CLAUDE_NOTES.md for the operator (cells are spawned from the stem-cell template per REPRODUCTION.md).'
+            echo 'CELL_BUILD_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude
+        if: steps.gate.outputs.should_run == 'true'
+        uses: grll/claude-code-action@beta
+        with:
+          use_oauth: true
+          claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
+          secrets_admin_pat: ${{ secrets.SECRETS_ADMIN_PAT }}
+          # Custom App identity for all git/gh operations, so commits and the
+          # prepared PR are authored by the colony bot (operator can review).
+          github_token: ${{ steps.app-token.outputs.token }}
+          direct_prompt: ${{ steps.prompt.outputs.text }}
+          branch_prefix: "claude/"
+          timeout_minutes: "55"
+          allowed_tools: "Bash,Edit,MultiEdit,Write,Read,Glob,Grep,mcp__queue"
+          # Enable the queue MCP server (the cell's memory) with its DB at the
+          # out-of-workspace path we restored above. A checked-out .mcp.json
+          # isn't auto-trusted in non-interactive CI, so pass it explicitly.
+          mcp_config: |
+            {
+              "mcpServers": {
+                "queue": {
+                  "command": "uv",
+                  "args": [
+                    "run", "--directory", "dev-tools/queue",
+                    "python", "server.py",
+                    "--db", "${{ runner.temp }}/cell-queue.db",
+                    "--transport", "stdio"
+                  ]
+                }
+              }
+            }
+          # Expose the colony token to Claude's shell for cross-cell gh calls.
+          claude_env: |
+            GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Persist queue state
+        # Save the (possibly updated) queue back to the state branch so the
+        # next run inherits the cell's memory. Runs even if Claude failed, so
+        # partial progress isn't lost. `concurrency` above prevents races.
+        if: always() && steps.gate.outputs.should_run == 'true'
+        env:
+          QUEUE_DB: ${{ runner.temp }}/cell-queue.db
+          PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          if [ ! -f "$QUEUE_DB" ]; then
+            echo "no queue db produced; nothing to persist"
+            exit 0
+          fi
+          # Fold any WAL back into the single file (no-op in default journal
+          # mode) so we persist exactly one small file.
+          if command -v sqlite3 >/dev/null 2>&1; then
+            sqlite3 "$QUEUE_DB" "PRAGMA wal_checkpoint(TRUNCATE);" || true
+          fi
+          work="$(mktemp -d)"
+          url="https://x-access-token:${PUSH_TOKEN}@github.com/${REPO}.git"
+          if git clone --depth 1 --branch colony/queue-state "$url" "$work" 2>/dev/null; then
+            cp "$QUEUE_DB" "$work/queue.db"
+          else
+            git clone --depth 1 "$url" "$work"
+            git -C "$work" checkout --orphan colony/queue-state
+            git -C "$work" rm -rf . >/dev/null 2>&1 || true
+            cp "$QUEUE_DB" "$work/queue.db"
+          fi
+          git -C "$work" config user.name "colony-bot"
+          git -C "$work" config user.email "colony-bot@users.noreply.github.com"
+          git -C "$work" add queue.db
+          if git -C "$work" diff --cached --quiet; then
+            echo "queue unchanged; nothing to persist"
+          else
+            git -C "$work" commit -q -m "chore(queue): persist state from run ${RUN_ID}"
+            git -C "$work" push -q origin colony/queue-state
+            echo "persisted queue.db to colony/queue-state"
+          fi
