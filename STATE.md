@@ -83,17 +83,8 @@ Operational infrastructure that **is** live for this cell:
   composite PK and refresh-time index). `payload_schema`
   serialized as JSON text. `SQLiteRepository.connect(path)` is
   the connect-and-init helper. The Registry is repository-agnostic
-  — wiring it against SQLite is a one-line change at
-  construction. PR 4 wires the MCP server on top.
-
-Examples of what will belong here once the cell ships its service:
-
-- A service or daemon, with where it runs and the address it's
-  reachable at
-- A scheduled job, with the schedule and the system that runs it
-- A library, with its current released version and where it's
-  published
-- A CLI, with where it's installed and its current version
+  — the MCP server (`src/atlas/server.py`) wires it against SQLite
+  at construction time.
 
 ---
 

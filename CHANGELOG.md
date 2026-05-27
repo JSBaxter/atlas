@@ -53,6 +53,15 @@ and this cell adheres to [Semantic Versioning](https://semver.org/).
   `payload_schema` serialized as JSON text. Connect-and-init via
   `SQLiteRepository.connect(path)`. Registry-with-SQLite smoke
   tests prove the swap from in-memory is contract-equivalent.
+- Atlas MCP server (`src/atlas/server.py`): FastMCP stdio server
+  wiring all 16 SPEC tools to the Registry + SQLiteRepository.
+  Tools cover cell lifecycle, capability declarations, tag admin,
+  discovery, and infrastructure (`health`, `ensure_registry`).
+  Similarity for `declare_capability` suggestions uses rapidfuzz
+  `token_set_ratio` at a ≥ 70 threshold, up to 5 results.
+  Registered in `.mcp.json`. Dispatch + smoke tests in
+  `tests/test_server.py`. `HANDOFF.md` deleted (no longer needed).
+  STATE.md updated to reflect the server as live. Closes #18.
 
 ### Changed
 
