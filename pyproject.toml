@@ -3,7 +3,13 @@ name = "atlas"
 version = "0.0.1"
 description = "Registry of cells and their capabilities. Source of truth for which cells exist and what each can do, expressed as capability tags."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "fastmcp>=2.0",
+    "rapidfuzz>=3.0",
+]
+
+[project.scripts]
+atlas = "atlas.server:main"
 
 [dependency-groups]
 dev = [
@@ -20,5 +26,9 @@ addopts = "-ra"
 [tool.ruff]
 target-version = "py311"
 
+[build-system]
+requires = ["uv_build>=0.5.0,<0.12"]
+build-backend = "uv_build"
+
 [tool.uv]
-package = false
+package = true
